@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create EC2 Instance
+
+Parameters:
+  KeyPairParameter:
+    Description: Select KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+  MyAvailabilityZone:
+    Description: Select Availability Zone
+    Type: String
+    AllowedValues:
+      - us-east-1a
+      - us-east-2a
+      - ap-south-1a
+    Default: us-east-1a
+  InstanceType:
+    Description: Select Ec2 Instance from SSM
+    Type: AWS::SSM::Parameter::Value<String>
+  ChooseEnvironment:
+    Description: Choose the environment
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+    Default: dev
+
+Mappings:
+  MyRegionMap:
+    us-east-1:
+      HVM64: ami-01893222c83843146
+    ap-south-1:
+      HVM64: ami-0651f1bab1a933ae5
+  EnvironmentName:
+    dev:
+      instanceType: t2.micro
+    prod:
+      instanceType: t2.small
+
+Conditions:
+  CreateDevSG: !Equals [!Ref ChooseEnvironment, dev]
+  CreateProdSG: !Equals [!Ref ChooseEnvironment, prod]
+
+Resources:
+  DevInstanceLogicalId:
+    Type: AWS::EC2::Instance
+    Properties:
+      # ImageId: ami-01893222c83843146
+      KeyName: cfn-key1
+      SecurityGroups: !If [CreateDevSG, [!Ref SSHSecurityGroupDev], !Ref SSHSecurityGroupProd]
+      #  - default
+      #  - !If [CreateDevSG, [!Ref SSHSecurityGroupDev], !Ref SSHSecurityGroupProd]
+      AvailabilityZone: !Ref MyAvailabilityZone
+      InstanceType: !FindInMap 
+        - EnvironmentName
+        - !Ref ChooseEnvironment
+        - instanceType
+      ImageId: !FindInMap 
+        - MyRegionMap
+        - !Ref 'AWS::Region'
+        - HVM64
+
+  SSHSecurityGroupDev:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateDevSG
+    Properties:
+      GroupDescription: Dev SG
+      SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: "22"
+         ToPort: "22"
+         CidrIp: "0.0.0.0/0"
+       - IpProtocol: tcp
+         FromPort: "8080"
+         ToPort: "8080"
+         CidrIp: "0.0.0.0/0"
+
+  SSHSecurityGroupProd:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateProdSG
+    Properties:
+      GroupDescription: Prod SG
+      SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: "22"
+         ToPort: "22"
+         CidrIp: "0.0.0.0/0"
+       - IpProtocol: tcp
+         FromPort: "8080"
+  
+  # ElasticIpForStackEc2:
+  #   Type: AWS::EC2::EIP
+  #   Properties:
+  #     InstanceId: !Ref DevInstanceLogicalId
+  
+
+      
